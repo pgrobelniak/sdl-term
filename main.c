@@ -65,14 +65,28 @@ void createFont() {
     }
 }
 
+int blinkThread(void *arg) {
+    SDL_Event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.type = userevent;
+    while(run) {
+        blink = !blink;
+        SDL_Delay(500);
+        SDL_PushEvent(&ev);
+    }
+    return 0;
+}
+
 void setup() {
     SDL_Init(SDL_INIT_EVERYTHING);
-    SDL_WindowFlags flags = 0; //SDL_WINDOW_OPENGL
+    SDL_WindowFlags flags = SDL_WINDOW_OPENGL;
     if(SDL_CreateWindowAndRenderer(WINDOW_WIDTH * SCALE, WINDOW_HEIGHT * SCALE, flags, &window, &renderer) < 0) {
         fprintf(stderr, "%s\n", SDL_GetError());
         exit(1);
     }
     SDL_SetWindowTitle(window, "Vortex");
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    SDL_SetHint("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0");
     createFont();
     for(int x = 0; x < TERM_WIDTH; x++) {
         for(int y = 0; y < TERM_HEIGHT; y++) {
@@ -80,9 +94,7 @@ void setup() {
         }
     }
     userevent = SDL_RegisterEvents(1);
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-    //SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
-    SDL_SetHint("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0");
+    SDL_CreateThread(blinkThread, "Blink", (void*)NULL);
 }
 
 void draw() {
@@ -125,8 +137,7 @@ void scroll() {
     }
 }
 
-void toggleFullscreen(void)
-{
+void toggleFullscreen(void) {
     Uint32 f = SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
     SDL_SetWindowFullscreen(window, f ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
@@ -139,6 +150,22 @@ void moveLeft() {
         if (cury<0) {
             cury = 0;
             curx = 0;
+        }
+    }
+}
+
+void backSpace() {
+    curx--;
+    if (curx < 0) {
+        moveLeft();
+        fb[cury][curx] = ' ';
+    } else {
+        for (int x = curx; x < TERM_WIDTH; x++) {
+            if (x == (TERM_WIDTH-1)) {
+                fb[cury][x] = ' ';
+            } else {
+                fb[cury][x] = fb[cury][x+1];
+            }
         }
     }
 }
@@ -186,8 +213,7 @@ void keydown(SDL_Scancode scancode, int repeat) {
             }
             return;
         case SDL_SCANCODE_BACKSPACE:
-            moveLeft();
-            fb[cury][curx]=' ';
+            backSpace();
             return;
         case SDL_SCANCODE_LEFT:
             moveLeft();
@@ -252,24 +278,10 @@ void loop() {
     }
 }
 
-int blinkThread(void *arg) {
-    SDL_Event ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.type = userevent;
-    while(run) {
-        blink = !blink;
-        SDL_Delay(500);
-        SDL_PushEvent(&ev);
-    }
-    return 0;
-}
-
 int main(int argc, char *argv[]) {
     setup();
-    SDL_Thread* blinkID = SDL_CreateThread(blinkThread, "Blink", (void*)NULL);
     loop();
     run = 0;
-    //SDL_WaitThread(blinkID, NULL);
     SDL_Quit();
     return 0;
 }
