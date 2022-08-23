@@ -19,7 +19,6 @@ struct Col
 	Uint8 a, b, g, r;
 };
 
-
 SDL_Window *window;
 SDL_Renderer *renderer;
 SDL_Texture *fonttex[128];
@@ -188,18 +187,20 @@ void keyup(SDL_Scancode scancode) {
 void loop() {
     SDL_Event ev;
     Uint32 lastTicks = SDL_GetTicks();
-    while(SDL_WaitEvent(&ev) >= 0) {
-        switch(ev.type){
-            case SDL_QUIT:
-                return;
-            case SDL_KEYDOWN:
-                keydown(ev.key.keysym.scancode, ev.key.repeat);
-                break;
-            case SDL_KEYUP:
-                keyup(ev.key.keysym.scancode);
-                break;
+    for(;;) {
+        while(SDL_PollEvent(&ev) != 0) {
+            switch(ev.type){
+                case SDL_QUIT:
+                    return;
+                case SDL_KEYDOWN:
+                    keydown(ev.key.keysym.scancode, ev.key.repeat);
+                    break;
+                case SDL_KEYUP:
+                    keyup(ev.key.keysym.scancode);
+                    break;
+            }
         }
-        if (SDL_GetTicks() - lastTicks > 1000) {
+        if (SDL_GetTicks() - lastTicks > 500) {
             lastTicks = SDL_GetTicks();
             blink = !blink;
         }
