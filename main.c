@@ -13,10 +13,19 @@
 #define WINDOW_WIDTH TERM_WIDTH*CHAR_WIDTH // 640
 #define WINDOW_HEIGHT TERM_HEIGHT*CHAR_HEIGHT // 480
 
+typedef struct Col Col;
+struct Col
+{
+	Uint8 a, b, g, r;
+};
+
+
 SDL_Window *window;
 SDL_Renderer *renderer;
 SDL_Texture *fonttex[128];
-
+char fb[TERM_HEIGHT][TERM_WIDTH];
+int curx = 0;
+int cury = 0;
 int shift = 0;
 int ctrl = 0;
 
@@ -24,11 +33,17 @@ void createChar(Uint32 *raster, int c) {
     int i, j;
     Uint8 *chr = &vt52rom[c*8];
     memset(raster, 0, CHAR_WIDTH*CHAR_HEIGHT*sizeof(Uint32));
+    Col *d = (Col*)raster;
     for(i = 0; i < 8; i++) {
         for(j = 0; j < 7; j++) {
             if(chr[i]&(0100>>j)) {
-                raster[(i*2+0)*CHAR_WIDTH + j] = 0xFF;
-                raster[(i*2+1)*CHAR_WIDTH + j] = 0xFF;
+                Col col;
+                col.r = 255;
+                col.g = 255;
+                col.b = 255;
+                col.a = 255;
+                d[(i*2)*CHAR_WIDTH + j] = col;
+                d[(i*2+1)*CHAR_WIDTH + j] = col;
             }
         }
     }
@@ -55,6 +70,34 @@ void setup() {
     SDL_SetWindowTitle(window, "Vortex");
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     createFont();
+    for(int x = 0; x < TERM_WIDTH; x++) {
+        for(int y = 0; y < TERM_HEIGHT; y++) {
+            fb[y][x] = ' ';
+        }
+    }
+}
+
+void draw() {
+    int x, y, c;
+    SDL_Rect r;
+    r.x = 0;
+    r.y = 0;
+    r.w = CHAR_WIDTH;
+    r.h = CHAR_HEIGHT;
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    for(x = 0; x < TERM_WIDTH; x++) {
+        for(y = 0; y < TERM_HEIGHT; y++) {
+            c = fb[y][x];
+            if(c < 128) {
+                printf("%c\n", c);
+                r.x = (x * CHAR_WIDTH);
+                r.y = (y * CHAR_HEIGHT);
+                SDL_RenderCopy(renderer, fonttex[c], NULL, &r);
+            }
+        }
+    }
+    SDL_RenderPresent(renderer);
 }
 
 void keydown(SDL_Scancode scancode, int repeat) {
@@ -68,12 +111,36 @@ void keydown(SDL_Scancode scancode, int repeat) {
         case SDL_SCANCODE_RCTRL: 
             ctrl = 1; 
             return;
+        case SDL_SCANCODE_RETURN:
+            curx++;
+            if (curx == TERM_WIDTH) {
+                curx = 0;
+                cury++;
+            }
+            return;
+        case SDL_SCANCODE_BACKSPACE:
+            curx--;
+            if (curx < 0) {
+                curx = 0;
+                cury--;
+                if (cury<0) {
+                    cury = 0;
+                }
+            }
+            fb[cury][curx]=' ';
+            return;
         default: 
             break;
     }
     char key = scancodemap[scancode][shift];
     if(ctrl) {
         key &= 037;
+    }
+    fb[cury][curx]=key;
+    curx++;
+    if (curx == TERM_WIDTH) {
+        curx = 0;
+        cury++;
     }
 }
 
@@ -106,6 +173,7 @@ void loop() {
                 keyup(ev.key.keysym.scancode);
                 break;
         }
+        draw();
     }
 }
 
