@@ -28,6 +28,8 @@ int cury = 0;
 int shift = 0;
 int ctrl = 0;
 int blink = 0;
+Uint32 userevent;
+int run = 1;
 
 void createChar(Uint32 *raster, int c) {
     int i, j;
@@ -40,7 +42,7 @@ void createChar(Uint32 *raster, int c) {
                 Col col;
                 col.r = 255;
                 col.g = 255;
-                col.b = 255;
+                col.b = 0;
                 col.a = 255;
                 d[(i*2)*CHAR_WIDTH + j] = col;
                 d[(i*2+1)*CHAR_WIDTH + j] = col;
@@ -61,6 +63,18 @@ void createFont() {
     }
 }
 
+int blinkThread(void *arg) {
+    SDL_Event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.type = userevent;
+    while(run) {
+        blink = !blink;
+        SDL_Delay(500);
+        SDL_PushEvent(&ev);
+    }
+    return 0;
+}
+
 void setup() {
     SDL_Init(SDL_INIT_EVERYTHING);
     if(SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer) < 0) {
@@ -75,6 +89,7 @@ void setup() {
             fb[y][x] = ' ';
         }
     }
+    userevent = SDL_RegisterEvents(1);
 }
 
 void draw() {
@@ -84,9 +99,9 @@ void draw() {
     r.y = 0;
     r.w = CHAR_WIDTH;
     r.h = CHAR_HEIGHT;
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
     SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
     for(x = 0; x < TERM_WIDTH; x++) {
         for(y = 0; y < TERM_HEIGHT; y++) {
             c = fb[y][x];
@@ -186,23 +201,16 @@ void keyup(SDL_Scancode scancode) {
 
 void loop() {
     SDL_Event ev;
-    Uint32 lastTicks = SDL_GetTicks();
-    for(;;) {
-        while(SDL_PollEvent(&ev) != 0) {
-            switch(ev.type){
-                case SDL_QUIT:
-                    return;
-                case SDL_KEYDOWN:
-                    keydown(ev.key.keysym.scancode, ev.key.repeat);
-                    break;
-                case SDL_KEYUP:
-                    keyup(ev.key.keysym.scancode);
-                    break;
-            }
-        }
-        if (SDL_GetTicks() - lastTicks > 500) {
-            lastTicks = SDL_GetTicks();
-            blink = !blink;
+    while(SDL_WaitEvent(&ev) >= 0) {
+        switch(ev.type){
+            case SDL_QUIT:
+                return;
+            case SDL_KEYDOWN:
+                keydown(ev.key.keysym.scancode, ev.key.repeat);
+                break;
+            case SDL_KEYUP:
+                keyup(ev.key.keysym.scancode);
+                break;
         }
         draw();
     }
@@ -210,7 +218,10 @@ void loop() {
 
 int main(int argc, char *argv[]) {
     setup();
+    SDL_Thread* blinkID = SDL_CreateThread(blinkThread, "Blink", (void*)NULL);
     loop();
+    run = 0;
+    SDL_WaitThread(blinkID, NULL);
     SDL_Quit();
     return 0;
 }
