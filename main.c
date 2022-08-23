@@ -4,8 +4,10 @@
 #include "scancodes.h"
 #include "vt52rom.h"
 
-#define TERM_WIDTH 80
-#define TERM_HEIGHT 24
+#define TERM_WIDTH 40//80
+#define TERM_HEIGHT 15//24
+
+#define SCALE 4
 
 #define CHAR_WIDTH 8
 #define CHAR_HEIGHT 20
@@ -63,21 +65,9 @@ void createFont() {
     }
 }
 
-int blinkThread(void *arg) {
-    SDL_Event ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.type = userevent;
-    while(run) {
-        blink = !blink;
-        SDL_Delay(500);
-        SDL_PushEvent(&ev);
-    }
-    return 0;
-}
-
 void setup() {
     SDL_Init(SDL_INIT_EVERYTHING);
-    if(SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer) < 0) {
+    if(SDL_CreateWindowAndRenderer(WINDOW_WIDTH * SCALE, WINDOW_HEIGHT * SCALE, 0, &window, &renderer) < 0) {
         fprintf(stderr, "%s\n", SDL_GetError());
         exit(1);
     }
@@ -90,6 +80,8 @@ void setup() {
         }
     }
     userevent = SDL_RegisterEvents(1);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    SDL_SetHint("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0");
 }
 
 void draw() {
@@ -97,8 +89,8 @@ void draw() {
     SDL_Rect r;
     r.x = 0;
     r.y = 0;
-    r.w = CHAR_WIDTH;
-    r.h = CHAR_HEIGHT;
+    r.w = CHAR_WIDTH * SCALE;
+    r.h = CHAR_HEIGHT * SCALE;
     SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
@@ -106,13 +98,13 @@ void draw() {
         for(y = 0; y < TERM_HEIGHT; y++) {
             c = fb[y][x];
             if(c < 128) {
-                r.x = (x * CHAR_WIDTH);
-                r.y = (y * CHAR_HEIGHT);
+                r.x = (x * CHAR_WIDTH * SCALE);
+                r.y = (y * CHAR_HEIGHT * SCALE);
                 SDL_RenderCopy(renderer, fonttex[c], NULL, &r);
             }
             if (blink && x == curx && y == cury) {
-                r.x = (x * CHAR_WIDTH);
-                r.y = (y * CHAR_HEIGHT);
+                r.x = (x * CHAR_WIDTH * SCALE);
+                r.y = (y * CHAR_HEIGHT * SCALE);
                 SDL_RenderFillRect(renderer, &r);
             }
         }
@@ -214,6 +206,18 @@ void loop() {
         }
         draw();
     }
+}
+
+int blinkThread(void *arg) {
+    SDL_Event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.type = userevent;
+    while(run) {
+        blink = !blink;
+        SDL_Delay(500);
+        SDL_PushEvent(&ev);
+    }
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
