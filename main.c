@@ -28,6 +28,7 @@ int curx = 0;
 int cury = 0;
 int shift = 0;
 int ctrl = 0;
+int blink = 0;
 
 void createChar(Uint32 *raster, int c) {
     int i, j;
@@ -86,18 +87,36 @@ void draw() {
     r.h = CHAR_HEIGHT;
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     for(x = 0; x < TERM_WIDTH; x++) {
         for(y = 0; y < TERM_HEIGHT; y++) {
             c = fb[y][x];
             if(c < 128) {
-                printf("%c\n", c);
                 r.x = (x * CHAR_WIDTH);
                 r.y = (y * CHAR_HEIGHT);
                 SDL_RenderCopy(renderer, fonttex[c], NULL, &r);
             }
+            if (blink && x == curx && y == cury) {
+                r.x = (x * CHAR_WIDTH);
+                r.y = (y * CHAR_HEIGHT);
+                SDL_RenderFillRect(renderer, &r);
+            }
         }
     }
     SDL_RenderPresent(renderer);
+}
+
+void scroll()
+{
+    int x, y;
+    for(y = 1; y < TERM_HEIGHT; y++) {
+        for(x = 0; x < TERM_WIDTH; x++) {
+            fb[y-1][x] = fb[y][x];
+        }
+    }
+    for(x = 0; x < TERM_WIDTH; x++) {
+        fb[TERM_HEIGHT-1][x] = ' ';
+    }
 }
 
 void keydown(SDL_Scancode scancode, int repeat) {
@@ -112,16 +131,18 @@ void keydown(SDL_Scancode scancode, int repeat) {
             ctrl = 1; 
             return;
         case SDL_SCANCODE_RETURN:
-            curx++;
-            if (curx == TERM_WIDTH) {
-                curx = 0;
-                cury++;
+            curx=0;
+            cury++;
+            if (cury == TERM_HEIGHT) {
+                scroll();
+                cury = TERM_HEIGHT-1;
             }
             return;
         case SDL_SCANCODE_BACKSPACE:
+            printf("BACK\n");
             curx--;
             if (curx < 0) {
-                curx = 0;
+                curx = TERM_WIDTH - 1;
                 cury--;
                 if (cury<0) {
                     cury = 0;
@@ -141,6 +162,10 @@ void keydown(SDL_Scancode scancode, int repeat) {
     if (curx == TERM_WIDTH) {
         curx = 0;
         cury++;
+        if (cury == TERM_HEIGHT) {
+            scroll();
+            cury = TERM_HEIGHT-1;
+        }
     }
 }
 
@@ -162,6 +187,7 @@ void keyup(SDL_Scancode scancode) {
 
 void loop() {
     SDL_Event ev;
+    Uint32 lastTicks = SDL_GetTicks();
     while(SDL_WaitEvent(&ev) >= 0) {
         switch(ev.type){
             case SDL_QUIT:
@@ -172,6 +198,10 @@ void loop() {
             case SDL_KEYUP:
                 keyup(ev.key.keysym.scancode);
                 break;
+        }
+        if (SDL_GetTicks() - lastTicks > 1000) {
+            lastTicks = SDL_GetTicks();
+            blink = !blink;
         }
         draw();
     }
