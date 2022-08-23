@@ -4,10 +4,10 @@
 #include "scancodes.h"
 #include "vt52rom.h"
 
-#define TERM_WIDTH 40//80
-#define TERM_HEIGHT 15//24
+#define TERM_WIDTH 80
+#define TERM_HEIGHT 24
 
-#define SCALE 4
+#define SCALE 1
 
 #define CHAR_WIDTH 8
 #define CHAR_HEIGHT 20
@@ -16,8 +16,7 @@
 #define WINDOW_HEIGHT TERM_HEIGHT*CHAR_HEIGHT // 480
 
 typedef struct Col Col;
-struct Col
-{
+struct Col {
 	Uint8 a, b, g, r;
 };
 
@@ -48,6 +47,7 @@ void createChar(Uint32 *raster, int c) {
                 col.a = 255;
                 d[(i*2)*CHAR_WIDTH + j] = col;
                 d[(i*2+1)*CHAR_WIDTH + j] = col;
+                //d[i*CHAR_WIDTH + j] = col;
             }
         }
     }
@@ -67,12 +67,12 @@ void createFont() {
 
 void setup() {
     SDL_Init(SDL_INIT_EVERYTHING);
-    if(SDL_CreateWindowAndRenderer(WINDOW_WIDTH * SCALE, WINDOW_HEIGHT * SCALE, 0, &window, &renderer) < 0) {
+    SDL_WindowFlags flags = 0; //SDL_WINDOW_OPENGL
+    if(SDL_CreateWindowAndRenderer(WINDOW_WIDTH * SCALE, WINDOW_HEIGHT * SCALE, flags, &window, &renderer) < 0) {
         fprintf(stderr, "%s\n", SDL_GetError());
         exit(1);
     }
     SDL_SetWindowTitle(window, "Vortex");
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
     createFont();
     for(int x = 0; x < TERM_WIDTH; x++) {
         for(int y = 0; y < TERM_HEIGHT; y++) {
@@ -81,6 +81,7 @@ void setup() {
     }
     userevent = SDL_RegisterEvents(1);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    //SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
     SDL_SetHint("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0");
 }
 
@@ -112,8 +113,7 @@ void draw() {
     SDL_RenderPresent(renderer);
 }
 
-void scroll()
-{
+void scroll() {
     int x, y;
     for(y = 1; y < TERM_HEIGHT; y++) {
         for(x = 0; x < TERM_WIDTH; x++) {
@@ -122,6 +122,47 @@ void scroll()
     }
     for(x = 0; x < TERM_WIDTH; x++) {
         fb[TERM_HEIGHT-1][x] = ' ';
+    }
+}
+
+void toggleFullscreen(void)
+{
+    Uint32 f = SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
+    SDL_SetWindowFullscreen(window, f ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+}
+
+void moveLeft() {
+    curx--;
+    if (curx < 0) {
+        curx = TERM_WIDTH - 1;
+        cury--;
+        if (cury<0) {
+            cury = 0;
+            curx = 0;
+        }
+    }
+}
+
+void moveUp() {
+    cury--;
+    if (cury < 0) {
+        cury = 0;
+    }
+}
+
+void moveDown() {
+    cury++;
+    if (cury == TERM_HEIGHT) {
+        scroll();
+        cury = TERM_HEIGHT-1;
+    }
+}
+
+void moveRight() {
+    curx++;
+    if (curx == TERM_WIDTH) {
+        curx = 0;
+        moveDown();
     }
 }
 
@@ -145,34 +186,37 @@ void keydown(SDL_Scancode scancode, int repeat) {
             }
             return;
         case SDL_SCANCODE_BACKSPACE:
-            printf("BACK\n");
-            curx--;
-            if (curx < 0) {
-                curx = TERM_WIDTH - 1;
-                cury--;
-                if (cury<0) {
-                    cury = 0;
-                }
-            }
+            moveLeft();
             fb[cury][curx]=' ';
+            return;
+        case SDL_SCANCODE_LEFT:
+            moveLeft();
+            return;
+        case SDL_SCANCODE_RIGHT:
+            moveRight();
+            return;
+        case SDL_SCANCODE_UP:
+            moveUp();
+            return;
+        case SDL_SCANCODE_DOWN:
+            moveDown();
             return;
         default: 
             break;
     }
-    char key = scancodemap[scancode][shift];
+    if(scancode == SDL_SCANCODE_F11 && !repeat) {
+        toggleFullscreen();
+    }
+    char *keys = scancodemap[scancode];
+    if(keys == NULL) {
+        return;
+    }
+    char key = keys[shift];
     if(ctrl) {
         key &= 037;
     }
     fb[cury][curx]=key;
-    curx++;
-    if (curx == TERM_WIDTH) {
-        curx = 0;
-        cury++;
-        if (cury == TERM_HEIGHT) {
-            scroll();
-            cury = TERM_HEIGHT-1;
-        }
-    }
+    moveRight();
 }
 
 void keyup(SDL_Scancode scancode) {
@@ -225,7 +269,7 @@ int main(int argc, char *argv[]) {
     SDL_Thread* blinkID = SDL_CreateThread(blinkThread, "Blink", (void*)NULL);
     loop();
     run = 0;
-    SDL_WaitThread(blinkID, NULL);
+    //SDL_WaitThread(blinkID, NULL);
     SDL_Quit();
     return 0;
 }
